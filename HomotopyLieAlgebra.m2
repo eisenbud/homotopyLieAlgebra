@@ -16,11 +16,49 @@ export {}
 ///
 restart
 debug needsPackage "DGAlgebras"
+loadPackage "HomotopyLieAlgebra"
+kk = ZZ/101
+S = kk[x,y,z]
+R = S/ideal(x^2,x*y,y^2,z^2)
+A = acyclicClosure (R,EndDegree => 3)
+cA = toComplex(A,4)
+cA.dd
+A.natural
+#degrees A.natural
+diff_A (T_3)
+B3 = getBasis(3,A)
+d = cA.dd_4
+vars4 = select(gens A.natural, t->first degree t == 4)
+vars2 = select(gens A.natural, t->first degree t == 2)
+vars1 = select(gens A.natural, t->first degree t == 1)
+M = for i from 0 to 4 list matrix {select(gens A.natural, t->first degree t == i)}
+dM4 = matrix {for t in vars4 list diff_A(t)}
+isHomogeneous dM4
+diff(transpose matrix M_1, dM4)
+prod = diff (transpose gens (ideal(M#1)*ideal(M#2)), dM4)
+
+
+map(R,A.natural,sub(vars A.natural - vars A.natural, R))
+phi = map(R,A.natural, toList(12:0_R), DegreeMap => d -> drop(d,1))
+kkk = kk[ DegreeRank => 1]
+degrees source M_1
+R/(ideal vars R)**source M_1
+degrees oo
+jmap(transpose phi prod
+
+
+restart
+debug needsPackage "DGAlgebras"
+loadPackage "HomotopyLieAlgebra"
 kk = ZZ/101
 S = kk[x,y]
-R = S/ideal(x^2,x*y,y^2)
-A1 = freeDGAlgebra(R,{{1,1},{1,1}})
-setDiff(A1,gens R)
+R = S/ideal(x^2,y^2,x*y)
+KR = koszulComplexDGA(ideal R)
+A1 = acyclicClosure(KR, EndDegree => 4)
+
+A1.natural
+toComplex(
+    
 A1.dd
 B = acyclicClosure (A1, EndDegree =>5)
 toComplex (B,5)
