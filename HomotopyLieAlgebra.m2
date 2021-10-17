@@ -10,9 +10,60 @@ newPackage("HomotopyLieAlgebra",
                 )                                                                
 
 
-export {}
+export {"pairing",
+        "bracket"}
 
 -* Code section *-
+homdeg = f -> first degree f 
+intdeg = f -> last degree f
+absdeg = m -> sum(listForm m)_0_0 -- number of factors of a monomial
+isSquare = m -> max (listForm m)_0_0 >=2
+
+pairing = method()
+pairing(List, RingElement) := RingElement => (L,M) -> (
+    --L = {U,V}, where U,V are (dual) variables of A1
+    --M is a monomial of absdeg 2 (possibly with nontrivial coef) in A1
+    --return 0 unless M == r*U*V, where r is in CoefficientRing A1
+    (U,V) := (L_0,L_1);
+    M2 := contract(V,M);
+    if M2 == 0  then return 0;
+    Mcoef := contract(U,M2);
+    if Mcoef == 0 then return 0;
+    --at this point U and V are the variables that are factors of M
+    if isSquare M then return 2*Mcoef;
+    sgn := (-1)^(homdeg V % 2);
+    sgn' := if index U >= index V then 1 else -1;
+    (sgn,sgn',sgn*sgn'*Mcoef))
+
+bracket = method()
+bracket (DGAlgebra, List) := Function => (A,L) ->(
+    --L = {U,V}, where U,V are (dual) variables of A.natural of degrees i+1 and j+1,
+    --regarded as generators of Pi^i and Pi^j.
+    --returns the action of [U,V] on the elements of A.natural
+    --that have homological degree homdeg U + homdeg V - 1.
+    (U,V) := (L_0,L_1);
+    Anatural := ring U;
+    (A',toA') := flattenRing Anatural;
+    fromA' := toA'^(-1);
+    g' := (gens A');
+    ud := toList(0..max(g'/homdeg));
+    gg' := apply(ud, i-> select(g', T -> homdeg T == i)); 
+    --now gg'_i is the list of variables of homological degree i in A.natural, in order of homdeg
+    A1 := coefficientRing A' [ flatten gg', Degrees => (flatten gg')/degree ]; -- now variables are in order by homol degree.
+    toA1 := (map(A1,A')*toA');
+    fromA1 := fromA'*(map(A',A1));
+    gg1 := apply(ud, i-> select(gens A1, T -> homdeg T == i));
+
+    map(Anatural^1, 
+	Anatural^(-(flatten gg1)/degree), 
+	apply(flatten gg1, T ->(
+		dT := diff(A, T);
+        	dT2 := select(terms dT, m -> absdeg m == 2);
+		fromA1 (pairing({toA1 U,toA1 V}, toA1 dT2))))
+	)
+    )
+
+
 ///
 restart
 debug needsPackage "DGAlgebras"
@@ -53,30 +104,51 @@ loadPackage "HomotopyLieAlgebra"
 kk = ZZ/101
 S = kk[x,y]
 R = S/ideal(x^5,y^2,x*y)
+lastCyclesDegree = 4
+
+
+ud = toList(0..lastCyclesDegree+1) -- degrees of the potential variables
 KR = koszulComplexDGA(ideal R)
-A = acyclicClosure(KR, EndDegree => 4)
+A = acyclicClosure(KR, EndDegree => lastCyclesDegree)
 (A',toA') = flattenRing A.natural
 fromA' = toA'^(-1)
 g' = (gens A')
 d' = g'/degree
-ud' =sort unique (d'/first)
-gg1 = apply(ud', i-> select(g', T -> first degree T == i))
+gg' = apply(ud, i-> select(g', T -> homdeg T == i))
 --now gg1_i is the list of variables of homological degree i in A'
-A1 = coefficientRing A' [ flatten gg1] -- now variables are in order by homol degree.
+A1 = coefficientRing A' [ flatten gg', Degrees => (flatten gg')/degree ] -- now variables are in order by homol degree.
 toA1 = (map(A1,A')*toA')
 fromA1 = fromA'*(map(A',A1))
+gg1 = apply(ud, i-> select(gens A1, T -> homdeg T == i))
+assert(isHomogeneous fromA1 and isHomogeneous toA1)
 
-absdegree = m -> sum(listForm m)_0_0 -- number of factors of a monomial
-f = toA' diff(A, fromA' T_7)
-qf = select(terms f, m -> absdegree m == 2)
---note: standardForm and listForm do not distinguish T_1*T_2 from T_2*T_1
+f = toA1 diff(A, fromA1 T_7)
+qf = select(terms f, m -> absdeg m == 2)
 
-(terms f)/absdegree
-(listForm (terms f)_0)
-listForm (terms f)_1
-A1.natural
+m = -3*A1_3*A1_7
+n = 7* gg1_2_0^2
+degree m
+degree  n
+isSquare m
+isSquare n
+(terms f)/absdeg
 
-toComplex(
+use A.natural    
+A.natural === ring T_2
+source (bracket {T_2,T_6})
+(bracket {T_2,T_6}) (fromA1 m)
+ring (fromA1 m) ===A.natural
+
+use A1    
+m,pairing ({T_1,T_6},m)
+m,pairing ({T_2,T_6},m)
+m,pairing ({T_6,T_2},m)
+
+
+n,pairing ({T_5,T_4},n)
+n,pairing ({T_4,T_4},n)
+
+
     
 A1.dd
 B = acyclicClosure (A1, EndDegree =>5)
