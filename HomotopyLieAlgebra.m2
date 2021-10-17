@@ -52,11 +52,30 @@ debug needsPackage "DGAlgebras"
 loadPackage "HomotopyLieAlgebra"
 kk = ZZ/101
 S = kk[x,y]
-R = S/ideal(x^2,y^2,x*y)
+R = S/ideal(x^5,y^2,x*y)
 KR = koszulComplexDGA(ideal R)
-A1 = acyclicClosure(KR, EndDegree => 4)
+A = acyclicClosure(KR, EndDegree => 4)
+(A',toA') = flattenRing A.natural
+fromA' = toA'^(-1)
+g' = (gens A')
+d' = g'/degree
+ud' =sort unique (d'/first)
+gg1 = apply(ud', i-> select(g', T -> first degree T == i))
+--now gg1_i is the list of variables of homological degree i in A'
+A1 = coefficientRing A' [ flatten gg1] -- now variables are in order by homol degree.
+toA1 = (map(A1,A')*toA')
+fromA1 = fromA'*(map(A',A1))
 
+absdegree = m -> sum(listForm m)_0_0 -- number of factors of a monomial
+f = toA' diff(A, fromA' T_7)
+qf = select(terms f, m -> absdegree m == 2)
+--note: standardForm and listForm do not distinguish T_1*T_2 from T_2*T_1
+
+(terms f)/absdegree
+(listForm (terms f)_0)
+listForm (terms f)_1
 A1.natural
+
 toComplex(
     
 A1.dd
@@ -80,6 +99,8 @@ isGolod R
 
 
 setDiff(A,flatten entries presentation R)
+
+
 ///
 
 -* Documentation section *-
