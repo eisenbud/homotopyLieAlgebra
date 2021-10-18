@@ -10,8 +10,9 @@ newPackage("HomotopyLieAlgebra",
                 )                                                                
 
 
-export {"pairing",
-        "bracket"}
+export {"bracket",
+	"bracketMatrix",
+	"allgens"}
 
 -* Code section *-
 homdeg = f -> first degree f 
@@ -19,184 +20,180 @@ intdeg = f -> last degree f
 absdeg = m -> sum(listForm m)_0_0 -- number of factors of a monomial
 isSquare = m -> max (listForm m)_0_0 >=2
 
-pairing = method()
-pairing(List, RingElement) := RingElement => (L,M) -> (
+allgens = method()
+allgens DGAlgebra := List => A -> (
+    g := apply(gens((flattenRing A.natural)_0), 
+               t -> sub(t, A.natural));
+    sort(g, T -> homdeg T))
+allgens(DGAlgebra, ZZ) := List => (A,d) -> select(allgens A, T -> homdeg T == d)		
+
+pairing1 = method()
+pairing1(List, RingElement) := RingElement => (L,M) -> (
     --L = {U,V}, where U,V are (dual) variables of A1
     --M is a monomial of absdeg 2 (possibly with nontrivial coef) in A1
     --return 0 unless M == r*U*V, where r is in CoefficientRing A1
+    --Note that the monomials xy in diff(A, T_) are always written with increasing index.
+    --Thus if index V > index U then <V,x> = 0, so the result is (-1)^(deg*deg)<u,x><v,y>
     (U,V) := (L_0,L_1);
+    A1 := ring U;
     M2 := contract(V,M);
-    if M2 == 0  then return 0;
+    if M2 == 0  then return 0_A1;
     Mcoef := contract(U,M2);
-    if Mcoef == 0 then return 0;
-    --at this point U and V are the variables that are factors of M
-    if isSquare M then return 2*Mcoef;
-    sgn := (-1)^(homdeg V % 2);
-    sgn' := if index U >= index V then 1 else -1;
-    (sgn,sgn',sgn*sgn'*Mcoef))
-
-bracket = method()
-bracket (DGAlgebra, List) := Function => (A,L) ->(
-    --L = {U,V}, where U,V are (dual) variables of A.natural of degrees i+1 and j+1,
-    --regarded as generators of Pi^i and Pi^j.
-    --returns the action of [U,V] on the elements of A.natural
-    --that have homological degree homdeg U + homdeg V - 1.
-    (U,V) := (L_0,L_1);
-    Anatural := ring U;
-    (A',toA') := flattenRing Anatural;
-    fromA' := toA'^(-1);
-    g' := (gens A');
-    ud := toList(0..max(g'/homdeg));
-    gg' := apply(ud, i-> select(g', T -> homdeg T == i)); 
-    --now gg'_i is the list of variables of homological degree i in A.natural, in order of homdeg
-    A1 := coefficientRing A' [ flatten gg', Degrees => (flatten gg')/degree ]; -- now variables are in order by homol degree.
-    toA1 := (map(A1,A')*toA');
-    fromA1 := fromA'*(map(A',A1));
-    gg1 := apply(ud, i-> select(gens A1, T -> homdeg T == i));
-
-    map(Anatural^1, 
-	Anatural^(-(flatten gg1)/degree), 
-	apply(flatten gg1, T ->(
-		dT := diff(A, T);
-        	dT2 := select(terms dT, m -> absdeg m == 2);
-		fromA1 (pairing({toA1 U,toA1 V}, toA1 dT2))))
-	)
+    if Mcoef == 0 then return 0_A1;
+    --at this point M = cxy, with index y >= index x
+    if isSquare M then if  homdeg U%2==0 then return 2*Mcoef else return 0_A1;
+    if index V < index U then Mcoef else
+    sgn := (-1)^((homdeg U)*(homdeg V)) * Mcoef
     )
 
+pairing = method()
+pairing(List, RingElement) := RingElement => (L,M) -> (
+    --L = {U,V}, where U,V are scalar linear combinations of generators u, v of A1,
+    --all of the same homdeg
+    --M is an element of A1
+    --returns the sum of the values of pairing1({u,v},m)
+    (U,V) := (L_0,L_1);
+    MM := select(terms M, m -> absdeg m == 2);
+    UU := terms U;
+    VV := terms V;
+    sum apply(UU, 
+	u-> sum apply(VV, 
+	    v -> sum apply(MM, 
+		M'-> pairing1({u,v},M'))))
+     )
+
+bracket = method()
+bracket (DGAlgebra, List) := Matrix => (A,L) ->(
+    --L = {U,V}, where U,V are scalar linear combinations of (dual) generators of A.natural
+    --of homological degrees d-1,e-1, regarded as elements of Pi_d,Pi_e.
+    --returns [U,V] 
+    --as an element of Pi_(d+e), represented as a sum of the dual generators
+    --of A.natural of degree i+j-1 
+
+    (A',toA') := flattenRing A.natural;
+    fromA' := toA'^(-1);
+    g' := sort(gens A', t->homdeg t); -- put the vars in order of homological degree
+    A1 := coefficientRing A'[g', Degrees => g'/degree];
+    ud := toList(0..max(g'/homdeg));
+    toA1 := (map(A1,A')*toA');
+    fromA1 := fromA'*(map(A',A1));
+    (U1,V1) := (toA1 L_0,toA1 L_1); 
+    g1 := select(gens A1, T->homdeg T == homdeg U1 + homdeg V1 + 1);
+    sum apply(g1, T ->(
+	dT := toA1 diff(A, fromA1 T);
+	fromA1 ((-1)^(homdeg V1)*T*pairing({U1,V1}, dT))
+	))
+    )
+
+bracketMatrix = method()
+bracketMatrix (DGAlgebra, ZZ,ZZ) := Matrix => (A,d,e) -> (
+    Pd := allgens(A,d-1); --dual basis of d-th homotopy group
+    Pe := allgens(A,e-1); --dual basis of e-th homotopy group
+    matrix apply(Pd, T -> apply(Pe, T' -> bracket(A,{T,T'})))
+	    )
+
+bracket (DGAlgebra, List, RingElement) := Matrix => (A,L,T) ->(
+    --L = {U,V}, where U,V are (dual) linear forms of A.natural
+    --regarded as generators of Pi and , and T is a an element of A.natural
+    --returns the action of [U,V] on T
+    (-1)^(homdeg L_1)*pairing(L, diff(A,T))
+	)
+
+bracket(DGAlgebra, ZZ, ZZ) := HashTable => (A,d1,d2) -> (
+--    g := allgens A;
+--    g1 := select(g, t -> homdeg t == d1-1); -- dual gens of Pi_d1
+--    g2 := select(g, t -> homdeg t == d2-1);  -- dual gens of Pi_d2
+--    g3 := select(g, t -> homdeg t == d1+d2-1); -- gens on which [Pi_d1, Pi_d2] acts
+    g1 := allgens(A, d1-1);
+    g2 := allgens(A, d2-1);
+    g3 := allgens(A, d1+d2-1);        
+    hashTable flatten flatten apply(g1, 
+	u -> apply(g2, 
+	    v -> apply(g3, 
+		T ->( ({u,v},T) => bracket(A,{u,v},T))
+		)))
+    )
+
+ad = method()
+ad(DGAlgebra, RingElement, RingElement) := Matrix => (A,T,T') ->(
+    --T is a sum of generators of A.natural all of the same homdeg, d-1 := homdeg T,
+    --regarded as an element of Pi_(d)
+    --T' is a sum of generators of A.natural all of the same homdeg, e-1 := homdeg T',
+    --regarded as an element of Pi_(e)
+    --ad(T)(T') is then a functional on A_(d+e-1), returned as the dual generator
+     b := bracket(A,{T,T'});
+     c := allgens(A, homdeg T + homdeg T' + 1)
+)    
 
 ///
 restart
-debug needsPackage "DGAlgebras"
-loadPackage "HomotopyLieAlgebra"
-kk = ZZ/101
-S = kk[x,y,z]
-R = S/ideal(x^2,x*y,y^2,z^2)
-A = acyclicClosure (R,EndDegree => 3)
-cA = toComplex(A,4)
-cA.dd
-A.natural
-#degrees A.natural
-diff_A (T_3)
-B3 = getBasis(3,A)
-d = cA.dd_4
-vars4 = select(gens A.natural, t->first degree t == 4)
-vars2 = select(gens A.natural, t->first degree t == 2)
-vars1 = select(gens A.natural, t->first degree t == 1)
-M = for i from 0 to 4 list matrix {select(gens A.natural, t->first degree t == i)}
-dM4 = matrix {for t in vars4 list diff_A(t)}
-isHomogeneous dM4
-diff(transpose matrix M_1, dM4)
-prod = diff (transpose gens (ideal(M#1)*ideal(M#2)), dM4)
+needsPackage "DGAlgebras"
+debug loadPackage "HomotopyLieAlgebra"
+///
 
-
-map(R,A.natural,sub(vars A.natural - vars A.natural, R))
-phi = map(R,A.natural, toList(12:0_R), DegreeMap => d -> drop(d,1))
-kkk = kk[ DegreeRank => 1]
-degrees source M_1
-R/(ideal vars R)**source M_1
-degrees oo
-jmap(transpose phi prod
-
-
-restart
-debug needsPackage "DGAlgebras"
-loadPackage "HomotopyLieAlgebra"
+TEST/// --graded skew symmetry:
 kk = ZZ/101
 S = kk[x,y]
-R = S/ideal(x^5,y^2,x*y)
+R = S/ideal(x^2,y^2,x*y)
 lastCyclesDegree = 4
-
-
-ud = toList(0..lastCyclesDegree+1) -- degrees of the potential variables
 KR = koszulComplexDGA(ideal R)
 A = acyclicClosure(KR, EndDegree => lastCyclesDegree)
-(A',toA') = flattenRing A.natural
-fromA' = toA'^(-1)
-g' = (gens A')
-d' = g'/degree
-gg' = apply(ud, i-> select(g', T -> homdeg T == i))
---now gg1_i is the list of variables of homological degree i in A'
-A1 = coefficientRing A' [ flatten gg', Degrees => (flatten gg')/degree ] -- now variables are in order by homol degree.
-toA1 = (map(A1,A')*toA')
-fromA1 = fromA'*(map(A',A1))
-gg1 = apply(ud, i-> select(gens A1, T -> homdeg T == i))
-assert(isHomogeneous fromA1 and isHomogeneous toA1)
-
-f = toA1 diff(A, fromA1 T_7)
-qf = select(terms f, m -> absdeg m == 2)
-
-m = -3*A1_3*A1_7
-n = 7* gg1_2_0^2
-degree m
-degree  n
-isSquare m
-isSquare n
-(terms f)/absdeg
-
-use A.natural    
-A.natural === ring T_2
-source (bracket {T_2,T_6})
-(bracket {T_2,T_6}) (fromA1 m)
-ring (fromA1 m) ===A.natural
-
-use A1    
-m,pairing ({T_1,T_6},m)
-m,pairing ({T_2,T_6},m)
-m,pairing ({T_6,T_2},m)
-
-
-n,pairing ({T_5,T_4},n)
-n,pairing ({T_4,T_4},n)
-
-
-    
-A1.dd
-B = acyclicClosure (A1, EndDegree =>5)
-toComplex (B,5)
-B.dd
-dgAlgebraMap(A1,B,matrix{{T_1,T_2,0,0,0}})
-A1.natural
-map((A1.natural)^1,, matrix{{A1.natural_0,A1.natural_1}|toList(25:0)})
-dgAlgebraMap(A1, B, oo)
-isWellDefined oo
-methods (dgAlgebraMultMap, B, )
-peek B.cache.diffs
-HH B
-B.dd
-peek A1
-
-A = freeDGAlgebra(S,{{1,2},{1,2}})
-prune HH(6,B)
-isGolod R
-
-
-setDiff(A,flatten entries presentation R)
-
+--
+assert(bracketMatrix(A,1,1) - transpose bracketMatrix(A,1,1) == 0)
+assert(bracketMatrix(A,2,1) + transpose bracketMatrix(A,1,2) == 0)
+assert(bracketMatrix(A,2,2) + transpose bracketMatrix(A,2,2) == 0) 
+assert(bracketMatrix(A,2,3) + transpose bracketMatrix(A,3,2) == 0) 
+assert(bracketMatrix(A,3,3) - transpose bracketMatrix(A,3,3) == 0) 
 
 ///
 
+TEST/// 
+--gradedJacobi identity: 
+--[U,[V,W]] = [[U,V],W] + (-1)^(1+homdeg U)*(1+homdeg V))* [V,[U,W]]
+d =
+///
 -* Documentation section *-
 beginDocumentation()
 
--*
+
 doc ///
 Key
  HomotopyLieAlgebra
-Headline
- Adjoint action of the homotopy Lie algebra of a local homomorphism
+Headline 
+ Homotopy Lie Algebra of a surjective ring homomorphism
 Description
   Text
-  Tree
+   If R = S/I, K is the Koszul complex on the generators of I, and A is the DGAlgebra
+   that is the acyclic closure of K, then the homotopy Lie algebra Pi of the map S -->> R
+   is defined as in Briggs ****.
   Example
-  CannedExample
-Acknowledgement
-Contributors
-References
-Caveat
+   S = ZZ/101[x,y]
+   R = S/ideal(x^2,y^2,x*y)
+   KR = koszulComplexDGA(ideal R)
+  Text
+   Since the acyclic closure is infinitely generated, we must specify 
+   the maximum homological degree
+   in which cycles will be killed
+  Example
+   lastCyclesDegree = 4
+   A = acyclicClosure(KR, EndDegree => lastCyclesDegree)
+  Text
+   The evaluation of bracketMatrix(A,d,e) gives the matrix of values of [Pi^d,Pi^e]
+  Example
+   bracketMatrix(A,1,1)
+   bracketMatrix(A,2,1)
+   bracketMatrix(A,2,2)
+  Text
+   Note that bracketMatrix(A,d,e) is antisymmetric in d,e if one of them is even,
+   and symmetric in d,e if both are odd
+  Example
+   bracketMatrix(A,1,1) - transpose bracketMatrix(A,1,1)
+   bracketMatrix(A,2,1) + transpose bracketMatrix(A,1,2)
+References 
+ Briggs, Avramov
 SeeAlso
-Subnodes
 ///
-
+-*
 doc ///
 Key
 Headline
