@@ -1,18 +1,19 @@
 newPackage("HomotopyLieAlgebra",                                                 
-                Headline => "compute parts of the adjoint action of the homotopy Lie algebra",
-                Version => "0.1",                                                
-                Date => "September 21, 2021",                                        
+                Headline => "Homotopy Lie algebra",
+                Version => "0.9",                                                
+                Date => "October 19, 2021",                                        
                 Authors => {                                                     
-                    {Name => "David Eisenbud", Email => "email1", HomePage => "url1"},  
-                    {Name => "Mike Stillman", Email => "email2", HomePage => "url2"}}, 
-                DebuggingMode => true,                                          
+                    {Name => "David Eisenbud", Email => "de@msri.org", HomePage => "www.msri.org/~de"}
+		    }
+                DebuggingMode => false,                                          
 		PackageExports => {"DGAlgebras"}
                 )                                                                
 
 
 export {"bracket",
 	"bracketMatrix",
-	"allgens"}
+	"allgens", 
+	"ad"}
 
 -* Code section *-
 homdeg = f -> first degree f 
@@ -26,8 +27,8 @@ allgens DGAlgebra := List => A -> (
                t -> sub(t, A.natural));
     sort(g, T -> homdeg T))
 allgens(DGAlgebra, ZZ) := List => (A,d) -> select(allgens A, T -> homdeg T == d)		
---if V is a variable with a coefficient, we want to extract the index of the variable!
 
+--if V is a variable with a coefficient, we want to extract the index of the variable!
 ind = V -> (keys ((keys standardForm V)_0))_0
 
 pairing1 = method()
@@ -105,10 +106,6 @@ bracket (DGAlgebra, List, RingElement) := Matrix => (A,L,T) ->(
 	)
 
 bracket(DGAlgebra, ZZ, ZZ) := HashTable => (A,d1,d2) -> (
---    g := allgens A;
---    g1 := select(g, t -> homdeg t == d1-1); -- dual gens of Pi_d1
---    g2 := select(g, t -> homdeg t == d2-1);  -- dual gens of Pi_d2
---    g3 := select(g, t -> homdeg t == d1+d2-1); -- gens on which [Pi_d1, Pi_d2] acts
     g1 := allgens(A, d1-1);
     g2 := allgens(A, d2-1);
     g3 := allgens(A, d1+d2-1);        
@@ -120,16 +117,36 @@ bracket(DGAlgebra, ZZ, ZZ) := HashTable => (A,d1,d2) -> (
     )
 
 ad = method()
-ad(DGAlgebra, RingElement, RingElement) := Matrix => (A,T,T') ->(
-    --T is a sum of generators of A.natural all of the same homdeg, d-1 := homdeg T,
-    --regarded as an element of Pi_(d)
-    --T' is a sum of generators of A.natural all of the same homdeg, e-1 := homdeg T',
-    --regarded as an element of Pi_(e)
-    --ad(T)(T') is then a functional on A_(d+e-1), returned as the dual generator
-     b := bracket(A,{T,T'});
-     c := allgens(A, homdeg T + homdeg T' + 1)
-)    
+ad(DGAlgebra, RingElement, ZZ) := Matrix => (A,U,e) ->(
+    --U is a scalar linear combination of generators of A.natural all of the same 
+    --homdeg, d-1 
+    --regarded as an element of Pi_(d).
+    --ad(U): Pi^e -> Pi^(d+e) is a linear transformation V-> [U,V].
+    d := homdeg U + 1;
+    md := matrix{allgens(A,d-1)};
+    me := matrix{allgens(A, e-1)}; 
+    mf := matrix{allgens(A, d + e - 1)};
+    UU := contract(md, U);
+    b := bracketMatrix(A,d,e);
+    contract(transpose mf, UU*b)
+    )
 
+///
+restart
+loadPackage "HomotopyLieAlgebra"
+
+   kk = ZZ/101
+   S = kk[x,y,z]
+   R = S/ideal(x^2,y^2,z^2-x*y,x*z, y*z)
+   lastCyclesDegree = 4
+   KR = koszulComplexDGA(ideal R)
+   A = acyclicClosure(KR, EndDegree => lastCyclesDegree);
+   d = 1
+   e = 1
+   U = sum (Gd = allgens(A,d-1))
+   ad(A,U,1)
+      
+///
 
 -* Documentation section *-
 beginDocumentation()
@@ -172,28 +189,235 @@ References
  Briggs, Avramov
 SeeAlso
 ///
--*
+
 doc ///
-Key
+Key 
+ bracket
+ (bracket, DGAlgebra, List, RingElement) 
+ (bracket, DGAlgebra, ZZ, ZZ)
+ (bracket, DGAlgebra, List)
 Headline
+ Computes the Lie product
 Usage
+ F = bracket(A,L,T)
+ F = bracket(A,L)
+ H = bracket(A,d,e)
 Inputs
+ A:DGAlgebra
+ L:List
+  list of two generators of A
+ T:RingElement
+  generator of A
+ d:ZZ
+ e:ZZ
 Outputs
-Consequences
-  Item
+ F:RingElement
+  linear form in A 
+ H:HashTable
+  gives all the products between (dual) elements of degrees d,e
 Description
   Text
+   Given a factor ring R = S/I, we take
+   A to be the acyclic closure, up to some degree n, of 
+   the Koszul complex on the generators of I. The underlying algebra An := A.natural
+   is thus a free algebra over S on generators T_i of various homological and internal
+   degrees.
+   
+   The Homotopy Lie algebra of the map S ->> R is the graded dual of the space of linear forms
+   Lin(A) of A. Since we obtain A together with a set of generators T_i, we identify the
+   Lie algebra with space of linear forms, using the T_i as a self-dual basis. Thus we
+   express the bracket product of two linear forms as another linear form. This inner product
+   on the linear forms of degree d extends naturally to an inner product between
+   Lin(A)**Lin(A) and the quadratic forms of A. This inner product has signs coming from
+   the homological grading, and is the only delicate part of the implementation.
+   
+   The bracket function is the workhorse of this collection of routines. Suppose that f,g are
+   three linear forms in the generators of A homogeneous in the homological grading,
+   of homological degrees d-1, e-1 respectively, which we regard as dual basis elements
+   of Pi^d and Pi^e, graded components of the homotopy Lie algebra Pi. We can compute
+   the bracket product
+   [f,g] as an element of Pi^{d+e}, or its action on a linear form F 
+   that is homogeneous of homological degree d+e-1 via the
+   inner product<f**g, d(F)_2>, where d is the differential of A. The calls
+   bracket(A,{f,g}) and
+   bracket(A, {f,g}, F) compute these products
+   
+   In the following example, we use the function 
+   allgens(A,d) to list the generators of A of homological degree d:
   Example
-  CannedExample
-  Code
-  Pre
-ExampleFiles
-Contributors
-References
-Caveat
+   needsPackage "DGAlgebras"
+   kk = ZZ/101
+   S = kk[x,y,z]
+   R = S/ideal(x^2,y^2,z^2-x*y,x*z, y*z)
+   lastCyclesDegree = 4
+   KR = koszulComplexDGA(ideal R)
+   A = acyclicClosure(KR, EndDegree => lastCyclesDegree);
+   p2 = allgens(A,1) -- dual generators of Pi^2   
+   p3 = allgens(A,2) -- dual generators of Pi^3
+   a5 = allgens(A,4) -- generators of A of homological degree 5
+   bracket(A, {sum p2, sum p3})
+   bracket(A,{sum p2, sum p3}, sum a5)
+  Text
+   The other invocation of bracket produces a HashTable displaying all the
+   bracket products of elements of Pi^d and Pi^e as functions on the generators
+   of homological degree d+e-1 of A:
+  Example
+   H = bracket(A,2,3);
+   #keys H
+   H' = select(keys H, k->H#k != 0);
+   H'
+   H#(H'_0)
+  Text
+   From this we see that [T_5, T_6] sends T_37 to -1 in kk.
+   
+   Another, often simpler view of the pairing is given by @TO bracketMatrix@, where the
+   rows and columns correspond to the generators of Pi^d and Pi^e, and the entries
+   are the bracket products, interpreted as elements of Pi^{d+e}. Note the anti-symmetry,
+   which holds when d or e are even and the symmetry in the case 
+   both are odd.
+  Example
+   bracketMatrix(A,1,2)
+   bracketMatrix(A,2,1)
+   bracketMatrix(A,1,1)
 SeeAlso
+ allgens
+ bracketMatrix
 ///
-*-
+
+doc ///
+Key
+ bracketMatrix
+ (bracketMatrix, DGAlgebra, ZZ, ZZ)
+Headline
+ Multiplication matrix of the homotopy Lie algebra
+Usage
+ M = bracketMatrix(A,d,e)
+Inputs
+ A:DGAlgebra
+  first part of the acyclic closure of a Koszul complex
+ d:ZZ
+ e:ZZ
+Outputs
+ M:Matrix
+  of linear forms in the generators of A
+Description
+  Text
+   This function implements the multiplication table of the degree d and degree e
+   components of the homotopy Lie algebra Pi. The entries of the matrix are linear
+   forms of homological degree d+e+1, interpreted as generators of Pi^{d+e}. See
+   @TO bracket@ for more details.
+  Example
+   kk = ZZ/101
+   S = kk[x,y,z]
+   R = S/ideal(x^2,y^2,z^2-x*y,x*z, y*z)
+   lastCyclesDegree = 4
+   KR = koszulComplexDGA(ideal R)
+   A = acyclicClosure(KR, EndDegree => lastCyclesDegree);
+   p1 = allgens(A,0) -- dual generators of Pi^1
+   p3 = allgens(A,2) -- dual generators of Pi^3
+   p4 = allgens(A,3) -- dual generators of Pi^4
+   bracketMatrix(A,1,3)
+SeeAlso
+ bracket
+ allgens
+///
+
+doc ///
+Key
+ allgens
+ (allgens, DGAlgebra)
+ (allgens, DGAlgebra, ZZ)
+Headline
+ List the generators of a given degree
+Usage
+ G = allgens A
+ Gd = allgens(A,d)
+Inputs
+ A:DGAlgebra
+ d:ZZ
+Outputs
+ G: List
+  of all generators of A
+ Gd:List
+  of all generators of homological degree d.
+Description
+  Text
+   The DGAlgebra is constructed as a polynomial ring over a ground ring that
+   is already a polynomial ring, and allgens includes the generators of the
+   subring.
+   
+   In invocations of @TO bracket@ and @TO bracketMatrix@ it is useful to refer to the
+   generators by reference to the lists formed by allGens, rather than by trying to name
+   them directly, since there is a confusion between generators of A.natural and
+   generators of (flattenRing A.natural)_0.
+   
+  Example
+   kk = ZZ/101
+   S = kk[x,y,z]
+   R = S/ideal(x^2,y^2,z^2-x*y,x*z, y*z)
+   lastCyclesDegree = 1
+   KR = koszulComplexDGA(ideal R)
+   A = acyclicClosure(KR, EndDegree => lastCyclesDegree);
+  Text
+   This causes the generators of the acyclic closure to be computed up to homological degree
+   lastCycleDegree+1, to kill the cycles in lastCycleDegree.
+   If S is graded, then the generators of A.natural have degreeLength 2, with the first
+   component the homological degree.
+   
+   Since A.natural is a polynomial ring over S, gens A.natural only lists the generators
+   of homological degree >=1, whereas allgens (made with fl
+  Example
+   g = gens(A.natural)
+   g/degree
+   allgens A
+   G3 = allgens(A,2)
+   G3/degree
+///
+
+doc ///
+Key
+ ad
+ (ad, DGAlgebra, RingElement, ZZ)
+Headline
+ matrix of the adjoint action
+Usage
+ M = ad(A,U,e)
+Inputs
+ A:DGAlgebra
+ U:RingElement
+  linear form in the generators of A
+ e:ZZ
+Outputs
+ M:Matrix
+  with entries in the ground field
+Description
+  Text
+   The adjoint action of a scalar linear combination of the entries of allgens(A,d-1)
+   U, regarded as an element of Pi^d, acts by bracket multiplcation with 
+   source Pi^e and target Pi^{d+e}. The output is a matrix whose columns 
+   correspond to a generalized row of the output of bracketMatrix.
+   bracketmatrix
+  Example
+   kk = ZZ/101
+   S = kk[x,y,z]
+   R = S/ideal(x^2,y^2,z^2-x*y,x*z, y*z)
+   lastCyclesDegree = 4
+   KR = koszulComplexDGA(ideal R)
+   A = acyclicClosure(KR, EndDegree => lastCyclesDegree);
+   d = 1
+   e = 1
+   U = sum (Gd = allgens(A,d-1))
+   ad(A,U,1)
+  Text
+   The columns of this matrix are the functionals that are the sum of the three
+   rows of the bracket multiplication table:
+  Example
+   matrix{{1,1,1}}*bracketMatrix(A,d,e)
+SeeAlso
+ bracketMatrix
+///
+
+-*
 -* Test section *-
 TEST/// --graded skew symmetry:
 kk = ZZ/101
@@ -252,4 +476,4 @@ check HomotopyLieAlgebra
 
 viewHelp HomotopyLieAlgebra
 
-netList path
+
