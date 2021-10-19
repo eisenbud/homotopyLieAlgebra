@@ -26,6 +26,9 @@ allgens DGAlgebra := List => A -> (
                t -> sub(t, A.natural));
     sort(g, T -> homdeg T))
 allgens(DGAlgebra, ZZ) := List => (A,d) -> select(allgens A, T -> homdeg T == d)		
+--if V is a variable with a coefficient, we want to extract the index of the variable!
+
+ind = V -> (keys ((keys standardForm V)_0))_0
 
 pairing1 = method()
 pairing1(List, RingElement) := RingElement => (L,M) -> (
@@ -42,7 +45,8 @@ pairing1(List, RingElement) := RingElement => (L,M) -> (
     if Mcoef == 0 then return 0_A1;
     --at this point M = cxy, with index y >= index x
     if isSquare M then if  homdeg U%2==0 then return 2*Mcoef else return 0_A1;
-    if index V < index U then Mcoef else
+--    if index V < index U then Mcoef else
+    if ind V < ind U then Mcoef else
     sgn := (-1)^((homdeg U)*(homdeg V)) * Mcoef
     )
 
@@ -69,7 +73,8 @@ bracket (DGAlgebra, List) := Matrix => (A,L) ->(
     --returns [U,V] 
     --as an element of Pi_(d+e), represented as a sum of the dual generators
     --of A.natural of degree i+j-1 
-
+    if L_0 == 0 or L_1 ==0 then return 0_(A.natural);
+    
     (A',toA') := flattenRing A.natural;
     fromA' := toA'^(-1);
     g' := sort(gens A', t->homdeg t); -- put the vars in order of homological degree
@@ -125,33 +130,7 @@ ad(DGAlgebra, RingElement, RingElement) := Matrix => (A,T,T') ->(
      c := allgens(A, homdeg T + homdeg T' + 1)
 )    
 
-///
-restart
-needsPackage "DGAlgebras"
-debug loadPackage "HomotopyLieAlgebra"
-///
 
-TEST/// --graded skew symmetry:
-kk = ZZ/101
-S = kk[x,y]
-R = S/ideal(x^2,y^2,x*y)
-lastCyclesDegree = 4
-KR = koszulComplexDGA(ideal R)
-A = acyclicClosure(KR, EndDegree => lastCyclesDegree)
---
-assert(bracketMatrix(A,1,1) - transpose bracketMatrix(A,1,1) == 0)
-assert(bracketMatrix(A,2,1) + transpose bracketMatrix(A,1,2) == 0)
-assert(bracketMatrix(A,2,2) + transpose bracketMatrix(A,2,2) == 0) 
-assert(bracketMatrix(A,2,3) + transpose bracketMatrix(A,3,2) == 0) 
-assert(bracketMatrix(A,3,3) - transpose bracketMatrix(A,3,3) == 0) 
-
-///
-
-TEST/// 
---gradedJacobi identity: 
---[U,[V,W]] = [[U,V],W] + (-1)^(1+homdeg U)*(1+homdeg V))* [V,[U,W]]
-d =
-///
 -* Documentation section *-
 beginDocumentation()
 
@@ -216,11 +195,61 @@ SeeAlso
 ///
 *-
 -* Test section *-
-TEST /// -* [insert short title for this test] *-
--- test code and assertions here
--- may have as many TEST sections as needed
+TEST/// --graded skew symmetry:
+kk = ZZ/101
+S = kk[x,y]
+R = S/ideal(x^2,y^2,x*y)
+lastCyclesDegree = 4
+KR = koszulComplexDGA(ideal R)
+A = acyclicClosure(KR, EndDegree => lastCyclesDegree)
+--
+assert(bracketMatrix(A,1,1) - transpose bracketMatrix(A,1,1) == 0)
+assert(bracketMatrix(A,2,1) + transpose bracketMatrix(A,1,2) == 0)
+assert(bracketMatrix(A,2,2) + transpose bracketMatrix(A,2,2) == 0) 
+assert(bracketMatrix(A,2,3) + transpose bracketMatrix(A,3,2) == 0) 
+assert(bracketMatrix(A,3,3) - transpose bracketMatrix(A,3,3) == 0) 
+
+///
+
+///
+restart
+needsPackage "DGAlgebras"
+loadPackage "HomotopyLieAlgebra"
+///
+
+TEST/// 
+--gradedJacobi identity: 
+--[U,[V,W]] = [[U,V],W] + (-1)^(1+homdeg U)*(1+homdeg V))* [V,[U,W]]
+
+kk = ZZ/101
+S = kk[x,y]
+R = S/ideal(x^2,y^2,x*y)
+lastCyclesDegree = 4
+KR = koszulComplexDGA(ideal R)
+A = acyclicClosure(KR, EndDegree => lastCyclesDegree)
+
+n = 2
+elapsedTime LL = flatten flatten flatten apply(n, d->apply(n, e-> apply(n, f->(
+Pid = allgens(A,d-1);
+Pie = allgens(A,e-1);
+Pif = allgens(A,f-1);
+L = flatten flatten flatten apply(Pid, U -> apply(Pie, V-> apply(Pif, W -> (		
+bracket(A, {U,bracket(A,{V,W})}) == 
+bracket(A, {bracket(A, {U,V}),W}) + (-1)^(d*e) * bracket(A, {V,bracket(A,{U,W})})
+    ))));
+all(L, ell ->ell)
+))));
+all(LL, ell->ell)
 ///
 
 end--
 
+
+uninstallPackage "HomotopyLieAlgebra"
+restart
 installPackage "HomotopyLieAlgebra"
+check HomotopyLieAlgebra
+
+viewHelp HomotopyLieAlgebra
+
+netList path
