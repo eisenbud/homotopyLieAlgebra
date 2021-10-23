@@ -4,7 +4,7 @@ newPackage("HomotopyLieAlgebra",
                 Date => "October 19, 2021",                                        
                 Authors => {                                                     
                     {Name => "David Eisenbud", Email => "de@msri.org", HomePage => "www.msri.org/~de"}
-		    }
+		    },
                 DebuggingMode => false,                                          
 		PackageExports => {"DGAlgebras"}
                 )                                                                
