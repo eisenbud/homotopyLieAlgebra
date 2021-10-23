@@ -1,13 +1,14 @@
-newPackage("HomotopyLieAlgebra",                                                 
+newPackage(
+    "HomotopyLieAlgebra",                                                 
                 Headline => "Homotopy Lie algebra",
                 Version => "0.9",                                                
                 Date => "October 19, 2021",                                        
                 Authors => {                                                     
                     {Name => "David Eisenbud", Email => "de@msri.org", HomePage => "www.msri.org/~de"}
-		    }
-                DebuggingMode => false,                                          
+		    },
+                DebuggingMode => false,
 		PackageExports => {"DGAlgebras"}
-                )                                                                
+                )                                      
 
 
 export {"bracket",
@@ -161,7 +162,8 @@ Description
   Text
    If R = S/I, K is the Koszul complex on the generators of I, and A is the DGAlgebra
    that is the acyclic closure of K, then the homotopy Lie algebra Pi of the map S -->> R
-   is defined as in Briggs ****.
+   is defined as in Briggs ****, with underlying vector space the graded dual
+   of the space spanned by a given set of generators of A.
   Example
    S = ZZ/101[x,y]
    R = S/ideal(x^2,y^2,x*y)
@@ -174,7 +176,10 @@ Description
    lastCyclesDegree = 4
    A = acyclicClosure(KR, EndDegree => lastCyclesDegree)
   Text
-   The evaluation of bracketMatrix(A,d,e) gives the matrix of values of [Pi^d,Pi^e]
+   The evaluation of bracketMatrix(A,d,e) gives the matrix of values of [Pi^d,Pi^e]. Here
+   we are identifying the vector space spanned by the generators of A with its graded dual
+   by taking the generators produced by the algorithm in the DGAlgebras package to
+   be self-dual.
   Example
    bracketMatrix(A,1,1)
    bracketMatrix(A,2,1)
