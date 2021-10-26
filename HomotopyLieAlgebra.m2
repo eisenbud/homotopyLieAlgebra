@@ -54,7 +54,7 @@ pairing1(List, RingElement) := RingElement => (L,M) -> (
     sgn := (-1)^((homdeg U)*(homdeg V)) * Mcoef
     )
 
-pairing1(List, RingElement,String) := RingElement => (L,M,"s") -> (
+pairing1(List, RingElement,String) := RingElement => (L,M,s) -> (
     --this is an alternate version, maybe faster?
     
     --L = {U,V}, where U,V are (dual) variables of A1
@@ -66,13 +66,13 @@ pairing1(List, RingElement,String) := RingElement => (L,M,"s") -> (
     --Note that the monomials xy in diff(A, T_) are always written with increasing index.
     --Thus if index V > index U then <V,x> = 0, so the result is (-1)^(deg*deg)<u,x><v,y>
     (U,V) := (L_0,L_1);
-    Mcoef = contract(U*V,M);
+    Mcoef := contract(U*V,M);
     --treat the case where the sign is +:
     if ((homdeg U)*(homdeg V)) % 2 == 0 then
        if U == V then return 2*Mcoef else return Mcoef;
     --now both are odd, sign is -
     if U == V then return 0;
-    if ind V<ind U then return -Mcoef else return Mcoef)
+    if ind V<ind U then return -Mcoef else return Mcoef
     )
 
 pairing = method()
@@ -89,6 +89,20 @@ pairing(List, RingElement) := RingElement => (L,M) -> (
 	u-> sum apply(VV, 
 	    v -> sum apply(MM, 
 		M'-> pairing1({u,v},M'))))
+     )
+pairing(List, RingElement, String) := RingElement => (L,M,s) -> (
+    --L = {U,V}, where U,V are scalar linear combinations of generators u, v of A1,
+    --all of the same homdeg
+    --M is an element of A1
+    --returns the sum of the values of pairing1({u,v},m)
+    (U,V) := (L_0,L_1);
+    MM := select(terms M, m -> absdeg m == 2);
+    UU := terms U;
+    VV := terms V;
+    sum apply(UU, 
+	u-> sum apply(VV, 
+	    v -> sum apply(MM, 
+		M'-> pairing1({u,v},M',"s"))))
      )
 
 bracket = method()
@@ -109,9 +123,9 @@ bracket (DGAlgebra, List) := Matrix => (A,L) ->(
     fromA1 := fromA'*(map(A',A1));
     (U1,V1) := (toA1 L_0,toA1 L_1); 
     g1 := select(gens A1, T->homdeg T == homdeg U1 + homdeg V1 + 1);
-    sum apply(g1, T ->(
+    elapsedTime sum apply(g1, T ->(
 	dT := toA1 diff(A, fromA1 T);
-	fromA1 ((-1)^(homdeg V1)*T*pairing({U1,V1}, dT))
+	fromA1 ((-1)^(homdeg V1)*T*pairing({U1,V1}, dT,"s"))
 	))
     )
 
@@ -126,7 +140,7 @@ bracket (DGAlgebra, List, RingElement) := Matrix => (A,L,T) ->(
     --L = {U,V}, where U,V are (dual) linear forms of A.natural
     --regarded as generators of Pi and , and T is a an element of A.natural
     --returns the action of [U,V] on T
-    (-1)^(homdeg L_1)*pairing(L, diff(A,T))
+    (-1)^(homdeg L_1)*pairing(L, diff(A,T),"s")
 	)
 
 bracket(DGAlgebra, ZZ, ZZ) := HashTable => (A,d1,d2) -> (
