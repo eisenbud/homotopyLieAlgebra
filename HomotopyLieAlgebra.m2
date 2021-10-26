@@ -6,7 +6,7 @@ newPackage(
                 Authors => {                                                     
                     {Name => "David Eisenbud", Email => "de@msri.org", HomePage => "www.msri.org/~de"}
 		    },
-                DebuggingMode => false,                                          
+                DebuggingMode => true,
 		PackageExports => {"DGAlgebras"}
                 )                                      
 
@@ -23,10 +23,17 @@ absdeg = m -> sum(listForm m)_0_0 -- number of factors of a monomial
 isSquare = m -> max (listForm m)_0_0 >=2
 
 allgens = method()
+-*
 allgens DGAlgebra := List => A -> (
     g := apply(gens((flattenRing A.natural)_0), 
                t -> sub(t, A.natural));
     sort(g, T -> homdeg T))
+allgens(DGAlgebra, ZZ) := List => (A,d) -> select(allgens A, T -> homdeg T == d)		
+*-
+allgens DGAlgebra := List => A -> (
+    flatten entries (vars coefficientRing A.natural | vars A.natural)
+    )
+
 allgens(DGAlgebra, ZZ) := List => (A,d) -> select(allgens A, T -> homdeg T == d)		
 
 --if V is a variable with a coefficient, we want to extract the index of the variable!
@@ -90,6 +97,7 @@ pairing(List, RingElement) := RingElement => (L,M) -> (
 	    v -> sum apply(MM, 
 		M'-> pairing1({u,v},M'))))
      )
+
 pairing(List, RingElement, String) := RingElement => (L,M,s) -> (
     --L = {U,V}, where U,V are scalar linear combinations of generators u, v of A1,
     --all of the same homdeg
@@ -113,26 +121,31 @@ bracket (DGAlgebra, List) := Matrix => (A,L) ->(
     --as an element of Pi_(d+e), represented as a sum of the dual generators
     --of A.natural of degree i+j-1 
     if L_0 == 0 or L_1 ==0 then return 0_(A.natural);
-    
+
+    if not A.cache#?"maps" then A.cache#"maps" = (
     (A',toA') := flattenRing A.natural;
     fromA' := toA'^(-1);
     g' := sort(gens A', t->homdeg t); -- put the vars in order of homological degree
     A1 := coefficientRing A'[g', Degrees => g'/degree];
-    ud := toList(0..max(g'/homdeg));
-    toA1 := (map(A1,A')*toA');
-    fromA1 := fromA'*(map(A',A1));
+--    ud := toList(0..max(g'/homdeg));
+    f := (map(A1,A')*toA');
+    g := fromA'*(map(A',A1));
+    (f,g));
+
+    (toA1,fromA1) := A.cache#"maps";
+    A1 := target toA1;
     (U1,V1) := (toA1 L_0,toA1 L_1); 
     g1 := select(gens A1, T->homdeg T == homdeg U1 + homdeg V1 + 1);
     elapsedTime sum apply(g1, T ->(
 	dT := toA1 diff(A, fromA1 T);
-	fromA1 ((-1)^(homdeg V1)*T*pairing({U1,V1}, dT,"s"))
+	fromA1 ((-1)^(homdeg V1)*T*pairing({U1,V1}, dT))
 	))
     )
 
 bracketMatrix = method()
 bracketMatrix (DGAlgebra, ZZ,ZZ) := Matrix => (A,d,e) -> (
-    Pd := allgens(A,d-1); --dual basis of d-th homotopy group
-    Pe := allgens(A,e-1); --dual basis of e-th homotopy group
+elapsedTime    Pd := allgens(A,d-1); --dual basis of d-th homotopy group
+elapsedTime    Pe := allgens(A,e-1); --dual basis of e-th homotopy group
     matrix apply(Pd, T -> apply(Pe, T' -> bracket(A,{T,T'})))
 	    )
 
@@ -140,18 +153,35 @@ bracket (DGAlgebra, List, RingElement) := Matrix => (A,L,T) ->(
     --L = {U,V}, where U,V are (dual) linear forms of A.natural
     --regarded as generators of Pi and , and T is a an element of A.natural
     --returns the action of [U,V] on T
-    (-1)^(homdeg L_1)*pairing(L, diff(A,T),"s")
+    (-1)^(homdeg L_1)*pairing(L, diff(A,T))
 	)
 
 bracket(DGAlgebra, ZZ, ZZ) := HashTable => (A,d1,d2) -> (
     g1 := allgens(A, d1-1);
     g2 := allgens(A, d2-1);
     g3 := allgens(A, d1+d2-1);        
-    hashTable flatten flatten apply(g1, 
+    print(#g1, #g2, #g3);
+    print g3;
+    elapsedTime hashTable flatten flatten apply(g1, 
 	u -> apply(g2, 
 	    v -> apply(g3, 
 		T ->( ({u,v},T) => bracket(A,{u,v},T))
 		)))
+    )
+
+bracket(DGAlgebra, ZZ, ZZ) := HashTable => (A,d1,d2) -> (
+    g1 := allgens(A, d1-1);
+    g2 := allgens(A, d2-1);
+    g3 := allgens(A, d1+d2-1);        
+    g3diff := apply(g3, T-> diff(A,T));
+    print(#g1, #g2, #g3);
+    print g3;
+    elapsedTime hashTable flatten flatten apply(g1, 
+	u -> apply(g2, 
+	    v -> apply(g3diff, 
+		dT ->( ({u,v},dT) =>
+		    (-1)^(homdeg v)*pairing({u,v}, dT)
+		))))
     )
 
 ad = method()
@@ -287,7 +317,9 @@ Description
    In the following example, we use the function 
    allgens(A,d) to list the generators of A of homological degree d:
   Example
+   restart
    needsPackage "DGAlgebras"
+   needsPackage "HomotopyLieAlgebra"
    kk = ZZ/101
    S = kk[x,y,z]
    R = S/ideal(x^2,y^2,z^2-x*y,x*z, y*z)
@@ -304,7 +336,7 @@ Description
    bracket products of elements of Pi^d and Pi^e as functions on the generators
    of homological degree d+e-1 of A:
   Example
-   H = bracket(A,2,3);
+   elapsedTime H = bracket(A,2,3);
    #keys H
    H' = select(keys H, k->H#k != 0);
    H'
@@ -349,16 +381,19 @@ Description
    forms of homological degree d+e+1, interpreted as generators of Pi^{d+e}. See
    @TO bracket@ for more details.
   Example
+   restart
+   needsPackage "DGAlgebras"
+   needsPackage "HomotopyLieAlgebra"
    kk = ZZ/101
    S = kk[x,y,z]
    R = S/ideal(x^2,y^2,z^2-x*y,x*z, y*z)
-   lastCyclesDegree = 4
-   KR = koszulComplexDGA(ideal R)
-   A = acyclicClosure(KR, EndDegree => lastCyclesDegree);
+   lastCyclesDegree = 5
+   elapsedTime KR = koszulComplexDGA(ideal R)
+   elapsedTime A = acyclicClosure(KR, EndDegree => lastCyclesDegree);
    p1 = allgens(A,0) -- dual generators of Pi^1
-   p3 = allgens(A,2) -- dual generators of Pi^3
+   elapsedTime    p3 = allgens(A,2) -- dual generators of Pi^3
    p4 = allgens(A,3) -- dual generators of Pi^4
-   bracketMatrix(A,1,3)
+   elapsedTime   bracketMatrix(A,2,2)
 SeeAlso
  bracket
  allgens
@@ -508,6 +543,31 @@ all(L, ell ->ell)
 all(LL, ell->ell)
 ///
 
+
+TEST/// 
+--gradedJacobi identity: 
+--[U,[V,W]] = [[U,V],W] + (-1)^(1+homdeg U)*(1+homdeg V))* [V,[U,W]]
+
+kk = ZZ/101
+S = kk[x,y]
+R = S/ideal(x^2,y^2,x*y)
+lastCyclesDegree = 4
+KR = koszulComplexDGA(ideal R)
+A = acyclicClosure(KR, EndDegree => lastCyclesDegree)
+
+n = 2
+elapsedTime LL = flatten flatten flatten apply(n, d->apply(n, e-> apply(n, f->(
+Pid = allgens(A,d-1);
+Pie = allgens(A,e-1);
+Pif = allgens(A,f-1);
+L = flatten flatten flatten apply(Pid, U -> apply(Pie, V-> apply(Pif, W -> (		
+bracket(A, {U,bracket(A,{V,W})}) == 
+bracket(A, {bracket(A, {U,V}),W}) + (-1)^(d*e) * bracket(A, {V,bracket(A,{U,W})})
+    ))));
+all(L, ell ->ell)
+))));
+all(LL, ell->ell)
+///
 end--
 
 
