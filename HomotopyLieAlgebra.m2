@@ -36,7 +36,9 @@ pairing1 = method()
 pairing1(List, RingElement) := RingElement => (L,M) -> (
     --L = {U,V}, where U,V are (dual) variables of A1
     --M is a monomial of absdeg 2 (possibly with nontrivial coef) in A1
-    --return 0 unless M == r*U*V, where r is in CoefficientRing A1
+    --return 0 unless M == r*x*y, and U,V = x,y or y,x, where r is in CoefficientRing A1.
+    --Returns:
+    --r(contract(V,x)*contract(U,y)+(-1)^((deg U)*(deg V))*contract(U,x)*contract(V,y).
     --Note that the monomials xy in diff(A, T_) are always written with increasing index.
     --Thus if index V > index U then <V,x> = 0, so the result is (-1)^(deg*deg)<u,x><v,y>
     (U,V) := (L_0,L_1);
@@ -50,6 +52,27 @@ pairing1(List, RingElement) := RingElement => (L,M) -> (
 --    if index V < index U then Mcoef else
     if ind V < ind U then Mcoef else
     sgn := (-1)^((homdeg U)*(homdeg V)) * Mcoef
+    )
+
+pairing1(List, RingElement,String) := RingElement => (L,M,"s") -> (
+    --this is an alternate version, maybe faster?
+    
+    --L = {U,V}, where U,V are (dual) variables of A1
+    --M is a monomial of absdeg 2 (possibly with nontrivial coef) in A1
+    --return 0 unless M == r*x*y, and U,V = x,y or y,x, where r is in CoefficientRing A1.
+    --Assumes ind x < ind y
+    --Returns:
+    --r(contract(V,x)*contract(U,y)+(-1)^((deg U)*(deg V))*contract(U,x)*contract(V,y).
+    --Note that the monomials xy in diff(A, T_) are always written with increasing index.
+    --Thus if index V > index U then <V,x> = 0, so the result is (-1)^(deg*deg)<u,x><v,y>
+    (U,V) := (L_0,L_1);
+    Mcoef = contract(U*V,M);
+    --treat the case where the sign is +:
+    if ((homdeg U)*(homdeg V)) % 2 == 0 then
+       if U == V then return 2*Mcoef else return Mcoef;
+    --now both are odd, sign is -
+    if U == V then return 0;
+    if ind V<ind U then return -Mcoef else return Mcoef)
     )
 
 pairing = method()
